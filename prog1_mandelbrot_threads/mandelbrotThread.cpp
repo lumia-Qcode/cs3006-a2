@@ -34,33 +34,29 @@ void workerThreadStart(WorkerArgs * const args) {
     const int numThreads = args->numThreads;
     const int height = args->height;
 
-    int startRow = 0;
-    int numRows = 0;
-
-    if (numThreads > 0 && height > 0) {
-        const int rowsPerThread = height / numThreads;
-        const int remainder = height % numThreads;
-        const int offset = threadId * rowsPerThread + std::min(threadId, remainder);
-        numRows = rowsPerThread + (threadId < remainder ? 1 : 0);
-        startRow = offset;
-    }
-
-    if (numRows <= 0) {
+    if (numThreads <= 0 || height <= 0) {
         return;
     }
 
+    int row = threadId;
+    int completedRows = 0;
     const double startTime = CycleTimer::currentSeconds();
-    mandelbrotSerial(
-        args->x0, args->y0, args->x1, args->y1,
-        args->width, args->height,
-        startRow, numRows,
-        args->maxIterations,
-        args->output);
+
+    while (row < height) {
+        mandelbrotSerial(
+            args->x0, args->y0, args->x1, args->y1,
+            args->width, args->height,
+            row, 1,
+            args->maxIterations,
+            args->output);
+        row += numThreads;
+        completedRows++;
+    }
+
     const double endTime = CycleTimer::currentSeconds();
 
-    printf("thread %d: rows [%d, %d) completed in %.3f ms\n",
-           threadId, startRow, startRow + numRows,
-           (endTime - startTime) * 1000.0);
+    printf("thread %d: %d rows completed in %.3f ms\n",
+           threadId, completedRows, (endTime - startTime) * 1000.0);
 }
 
 //
