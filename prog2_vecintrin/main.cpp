@@ -241,15 +241,49 @@ void clampedExpSerial(float* values, int* exponents, float* output, int N) {
 }
 
 void clampedExpVector(float* values, int* exponents, float* output, int N) {
+  __cs149_vec_float x;
+  __cs149_vec_float result;
+  __cs149_vec_float clamp = _cs149_vset_float(9.999999f);
+  __cs149_vec_int exponent;
+  __cs149_vec_int count;
+  __cs149_vec_int zero = _cs149_vset_int(0);
+  __cs149_vec_int one = _cs149_vset_int(1);
+  __cs149_mask valid;
+  __cs149_mask nonzero;
+  __cs149_mask active;
+  __cs149_mask next;
+  __cs149_mask tooLarge;
 
-  //
-  // CS149 STUDENTS TODO: Implement your vectorized version of
-  // clampedExpSerial() here.
-  //
-  // Your solution should work for any value of
-  // N and VECTOR_WIDTH, not just when VECTOR_WIDTH divides N
-  //
-  
+  for (int i=0; i<N; i+=VECTOR_WIDTH) {
+    int remaining = N - i;
+    valid = _cs149_init_ones(remaining < VECTOR_WIDTH ? remaining : VECTOR_WIDTH);
+
+    _cs149_vload_float(x, values+i, valid);
+    _cs149_vload_int(exponent, exponents+i, valid);
+    _cs149_vset_float(result, 1.f, valid);
+
+    nonzero = _cs149_init_ones(0);
+    _cs149_vgt_int(nonzero, exponent, zero, valid);
+    _cs149_vmove_float(result, x, nonzero);
+
+    count = exponent;
+    _cs149_vsub_int(count, count, one, nonzero);
+    active = _cs149_init_ones(0);
+    _cs149_vgt_int(active, count, zero, nonzero);
+
+    while (_cs149_cntbits(active) > 0) {
+      _cs149_vmult_float(result, result, x, active);
+      _cs149_vsub_int(count, count, one, active);
+      next = _cs149_init_ones(0);
+      _cs149_vgt_int(next, count, zero, active);
+      active = next;
+    }
+
+    tooLarge = _cs149_init_ones(0);
+    _cs149_vgt_float(tooLarge, result, clamp, valid);
+    _cs149_vset_float(result, 9.999999f, tooLarge);
+    _cs149_vstore_float(output+i, result, valid);
+  }
 }
 
 // returns the sum of all elements in values
@@ -266,15 +300,21 @@ float arraySumSerial(float* values, int N) {
 // You can assume N is a multiple of VECTOR_WIDTH
 // You can assume VECTOR_WIDTH is a power of 2
 float arraySumVector(float* values, int N) {
-  
-  //
-  // CS149 STUDENTS TODO: Implement your vectorized version of arraySumSerial here
-  //
-  
-  for (int i=0; i<N; i+=VECTOR_WIDTH) {
+  __cs149_vec_float sum = _cs149_vset_float(0.f);
+  __cs149_vec_float valuesVector;
+  __cs149_vec_float reduced;
+  __cs149_mask all = _cs149_init_ones();
 
+  for (int i=0; i<N; i+=VECTOR_WIDTH) {
+    _cs149_vload_float(valuesVector, values+i, all);
+    _cs149_vadd_float(sum, sum, valuesVector, all);
   }
 
-  return 0.0;
+  for (int width=VECTOR_WIDTH; width>1; width/=2) {
+    _cs149_hadd_float(reduced, sum);
+    _cs149_interleave_float(sum, reduced);
+  }
+
+  return sum.value[0];
 }
 
